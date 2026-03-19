@@ -19,10 +19,7 @@ class Storing:
         self.lc_docs=[]
         self.active_doc=[]
 
-        # Make sure directory exists
         os.makedirs(self.persist_directory, exist_ok=True)
-        # emb_func = embedding()
-        # Initialize LangChain Chroma vectorstore
         self.vectorstore = Chroma(
             collection_name=self.collection_name,
             embedding_function=embedding,  # your function
@@ -35,7 +32,7 @@ class Storing:
         Add documents to Chroma vectorstore.
         Each document will store its doc_id in metadata for retrieval filtering.
         """
-
+        active_doc = []  
         # Convert to LangChain Document objects
     
         

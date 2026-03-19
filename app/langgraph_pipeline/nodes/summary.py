@@ -8,9 +8,10 @@ from fastapi import Request
 def summary(state: GraphState):
     print("summary node----running")
     query=state["query"]
-    
-    active = request.app.state.vectorstore.get_active_doc()
-    current_doc =active[0].metadata['doc_id']
+    store=state.get("store")
+    active_doc=state.get("active_doc")
+    retriever=state.get("retriever")
+    current_doc =active_doc[0].metadata['doc_id']
     print(f"Doc id = {current_doc}")
     if not current_doc:
         return {"context": ""}
@@ -19,7 +20,7 @@ def summary(state: GraphState):
     try:
         
         print("i am inside try")
-        fetched_context = request.app.state.retriever.fetch(
+        fetched_context =retriever.fetch(
         query=query,
         fetch_all=True,
         doc_ids=current_doc ,

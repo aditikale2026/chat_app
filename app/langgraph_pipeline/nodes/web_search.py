@@ -1,5 +1,5 @@
 from app.langgraph_pipeline.state import GraphState
-from duckduckgo_search import DDGS
+from ddgs import DDGS
 import logging
 from app.utils.doc_cache import result
 
@@ -17,10 +17,10 @@ def web_search(state:GraphState):
             
         context = "\n\n".join([
         f"Source: {r['href']}\nTitle: {r['title']}\n{r['body']}"
-        for r in results
+        for r in result
            ])   
             
-        logger.info(f"[web_search_node] Got {len(results)} results")
+        logger.info(f"[web_search_node] Got {len(result)} results")
         return {"context": context, "mode": "web_search"}
              
     except Exception as e:

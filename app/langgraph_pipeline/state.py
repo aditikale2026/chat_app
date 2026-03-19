@@ -13,3 +13,5 @@ class GraphState(TypedDict):
     context : str | None
     fetch_all :bool
     retriever:Any
+    store :Any
+    active_doc:Any

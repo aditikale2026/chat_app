@@ -1,3 +1,5 @@
+from typing import List
+
 def chunk_context(context: str, chunk_size: int = 20000) -> List[str]:
     """Split large context into smaller chunks by characters."""
     chunks = []

@@ -6,8 +6,8 @@ from fastapi import APIRouter,Request,HTTPException
 router=APIRouter(prefix="/rag")
 @router.post("/query",response_model=RAGResponse)
 async def rag_query_endpoint(request:RAGRequest,req:Request):
-    obj= req.app.state.vectorstore
-    doc=obj.active_doc
+    store= req.app.state.vectorstore
+    doc=store.get_active_docs()
     print(doc)
     # doc_id = doc_id
     
@@ -24,8 +24,9 @@ async def rag_query_endpoint(request:RAGRequest,req:Request):
             "answer": "",
             "messages":[],
             # "doc_id":doc_id
-            "retrive" :req.app.state.retriever
-            
+            "retriever" :req.app.state.retriever,
+            "store":store,
+            "active_doc":doc
             }
 
         final_state = graph.invoke(initial_state,config=config)
