@@ -12,6 +12,4 @@ class GraphState(TypedDict):
     upload_time: str | None  # new
     context : str | None
     fetch_all :bool
-    retriever:Any
-    store :Any
-    active_doc:Any
+    
