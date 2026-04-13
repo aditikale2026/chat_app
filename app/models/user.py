@@ -1,20 +1,15 @@
-from pydantic import basemodel
-from typing import Literal
+from sqlalchemy import Column, String, Integer
+from app.db import Base
+from pydantic import BaseModel
 
-class UserCreate(basemodel):
-    username:str
-    password:str
-    role:Literal['admin','user','viewer']='user'
-    
-class UserInDatabase(basemodel):
-    username:str
-    hashed_password:str
-    role:str
-    
-class TokenResponse(basemodel):
-    access_token:str
-    token_type:str = 'bearer'
-    
-    
-    
-            
+class UserORM(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True)
+    username = Column(String, unique=True, nullable=False)
+    hashed_password = Column(String, nullable=False)
+    role = Column(String, default="user")
+
+class UserCreate(BaseModel):
+    username: str
+    password: str
+    role: str = "user"
