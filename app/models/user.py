@@ -1,5 +1,5 @@
 from sqlalchemy import Column, String, Integer
-from app.db import Base
+from app.db.postgressconnection import Base
 from pydantic import BaseModel
 
 class UserORM(Base):

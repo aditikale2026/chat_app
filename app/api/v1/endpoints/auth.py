@@ -8,11 +8,17 @@ from datetime import datetime, timedelta
 from app.db.postgressconnection import get_db
 from app.models.user import UserORM, UserCreate
 from app.config import settings
-
+from pydantic import BaseModel
 router = APIRouter(prefix="/auth")
 pwd = CryptContext(schemes=["bcrypt"])
 oauth2 = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
+# add this model in auth.py
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+    
+    
 def make_token(username: str, role: str):
     return jwt.encode(
         {"sub": username, "role": role, "exp": datetime.utcnow() + timedelta(hours=1)},
@@ -39,8 +45,9 @@ async def register(payload: UserCreate, db: AsyncSession = Depends(get_db)):
     await db.commit()
     return {"message": "User created"}
 
+
 @router.post("/login")
-async def login(form: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
+async def login(form: LoginRequest, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(UserORM).where(UserORM.username == form.username))
     user = result.scalar_one_or_none()
     if not user or not pwd.verify(form.password, user.hashed_password):
