@@ -1,29 +1,28 @@
 from app.models.schemas import RAGRequest, RAGResponse
 from app.langgraph_pipeline.graph_builder import graph
-from fastapi import APIRouter, Request, HTTPException
-from fastapi import APIRouter, Request, HTTPException, Depends  # ✅ add Depends
-from app.api.v1.endpoints.auth import get_current_user          # ✅ add
-from app.models.user import UserORM 
-
+from fastapi import APIRouter, Request, HTTPException, Depends
+from app.api.v1.endpoints.auth import get_current_user
+from app.models.user import UserORM
 
 router = APIRouter(prefix="/rag")
 
 @router.post("/query", response_model=RAGResponse)
-async def rag_query_endpoint(request: RAGRequest, req: Request,current_user: UserORM = Depends(get_current_user)):
-    # CHANGED: removed passing retriever, store, active_doc in initial_state
-    # those objects are now fetched inside nodes via get_service()
-    # only serializable fields go into state now
+async def rag_query_endpoint(
+    request: RAGRequest,
+    req: Request,
+    current_user: UserORM = Depends(get_current_user)
+):
     try:
         config = {
             "configurable": {
-                "thread_id": "rag_user"
+                "thread_id": current_user.username  # ✅ unique memory per user
             }
         }
+
+        # ✅no messages here — checkpointer loads them automatically
         initial_state = {
             "query": request.query,
             "answer": "",
-            "messages": [],
-            # CHANGED: removed retriever, store, active_doc from here
         }
 
         final_state = graph.invoke(initial_state, config=config)

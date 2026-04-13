@@ -1,110 +1,165 @@
 from app.langgraph_pipeline.state import GraphState
-from app.services.llm_service import get__llm
+from app.services.llm_service import get__llm, get_system_prompt
 from app.utils.summarization_utility import map_reduce_summary
+from app.langgraph_pipeline.nodes.answer_validator import validate_answer
+from langchain_core.messages import HumanMessage, AIMessage
+import re
 
 MAX_CHARS = 80000
 llm = get__llm()
 
-def llm_node(state: GraphState):
+def _format_messages(messages):
+    if not messages:
+        return "No previous conversation."
+    formatted = []
+    for msg in messages:
+        if isinstance(msg, HumanMessage):
+            formatted.append(f"User: {msg.content}")
+        elif isinstance(msg, AIMessage):
+            formatted.append(f"Assistant: {msg.content}")
+    return "\n".join(formatted)
 
-    context = state.get("context")
+def _clean_markdown(text: str) -> str:
+    text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)
+    text = re.sub(r'\*(.*?)\*', r'\1', text)
+    text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
+    text = re.sub(r'^\s*[\*\-]\s+', '', text, flags=re.MULTILINE)
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    return text.strip()
+
+def llm_node(state: GraphState):
+    context = state.get("context", "")
     query = state.get("query")
     mode = state.get("mode")
+    messages = state.get("messages", [])
+    system_prompt = get_system_prompt()
+    history = _format_messages(messages)
 
     # ─── SUMMARY MODE ───────────────────────────────────────────────
     if mode == "summary":
         print(f"Context size: {len(context)} chars | Limit: {MAX_CHARS} chars")
 
         if len(context) > MAX_CHARS:
-            print("Context too large → using map-reduce summarization")
             response_text = map_reduce_summary(llm, context)
-            return {"answer": response_text}
+            response_text = _clean_markdown(response_text)
+            updated_messages = list(messages) + [
+                HumanMessage(content=query),
+                AIMessage(content=response_text)
+            ]
+            return {"answer": response_text, "messages": updated_messages}
 
-        else:
-            print("Context within limit → direct summarization")
-            prompt = f"""
-You are an expert document analyst. Your task is to produce a structured, 
-insightful summary of the provided document content.
+        # ✅ chain of thought for summary
+        prompt = f"""{system_prompt}
 
-Instructions:
-- Start with a 2-3 sentence overview of what the document is about
-- Highlight the key topics, findings, or arguments
-- Mention any important data, dates, names, or conclusions
-- End with a 1 sentence takeaway
-- Do NOT add any information not present in the document
-- Use clear, professional language
+Previous conversation:
+{history}
 
 Document Content:
 {context}
 
-Structured Summary:
+User asked: {query}
+
+Think through this step by step:
+Step 1 - What is the main topic of this document?
+Step 2 - What are the key points?
+Step 3 - What conclusions does it reach?
+Step 4 - Write a clean summary in plain text paragraphs.
+
+Final Summary:
 """
 
     # ─── QA MODE ────────────────────────────────────────────────────
     elif mode == "qa":
-        prompt = f"""
-You are a precise and reliable question-answering assistant working with document content.
+        # ✅ few shot + chain of thought for qa
+        prompt = f"""{system_prompt}
 
-Rules:
-- Answer ONLY using the information present in the context below
-- If the answer is partially present, provide what you can and clearly state what is missing
-- If the answer is not in the context at all, respond with:
-  "The provided document does not contain information about this topic."
-- Never guess, assume, or use outside knowledge
-- Keep your answer concise and directly address the question
-- If relevant, mention which part of the document supports your answer
+Here are examples of good answers:
 
-Context:
+Question: What is the revenue mentioned in the document?
+Answer: The document states the revenue was 5 million dollars in Q3 2024.
+
+Question: Who is the author?
+Answer: The document does not mention an author.
+
+Previous conversation:
+{history}
+
+Document Content:
 {context}
 
-Question:
-{query}
+Question: {query}
 
-Answer:
+Think through this step by step:
+Step 1 - Find relevant parts of the document
+Step 2 - Check if the answer is actually there
+Step 3 - Form a direct, precise answer
+
+Final Answer:
 """
 
     # ─── WEB SEARCH MODE ────────────────────────────────────────────
     elif mode == "web_search":
-        prompt = f"""
-You are a knowledgeable assistant that answers questions using real-time web search results.
+        prompt = f"""{system_prompt}
 
-Instructions:
-- Synthesize the search results into a clear, accurate answer
-- Prioritize the most relevant and recent information
-- Cite sources by mentioning the title or URL where relevant
-- If search results are conflicting, mention the discrepancy
-- If no relevant results were found, say so clearly
-- Keep the answer focused and avoid unnecessary repetition
+Previous conversation:
+{history}
 
 Web Search Results:
 {context}
 
-Question:
-{query}
+Question: {query}
 
-Answer:
+Think through this step by step:
+Step 1 - Which search results are most relevant?
+Step 2 - What is the most accurate answer?
+Step 3 - Synthesize into a clean direct answer
+
+Final Answer:
 """
 
-    # ─── CHAT / GENERAL MODE ────────────────────────────────────────
+    # ─── CHAT MODE ──────────────────────────────────────────────────
     else:
-        prompt = f"""
-You are a helpful, friendly, and knowledgeable conversational assistant 
-integrated into a document-based chat application.
+        prompt = f"""{system_prompt}
 
-Instructions:
-- Answer the user's question naturally and conversationally
-- If the question seems related to documents or PDFs, 
-  suggest the user upload a document for more accurate answers
-- Be concise but complete
-- If you are unsure, say so honestly
+Previous conversation:
+{history}
 
-Question:
-{query}
+User: {query}
 
-Answer:
+Response:
 """
 
     response_obj = llm.invoke(prompt)
-    response_text = response_obj.content
+    response_text = _clean_markdown(response_obj.content)
 
-    return {"answer": response_text}
+    # ✅ answer validation for qa and summary
+    if mode in ["qa", "summary"]:
+        is_valid = validate_answer(query, response_text, context, mode)
+        if not is_valid:
+            print("[llm_node] Answer failed validation → regenerating")
+            # regenerate with stricter prompt
+            strict_prompt = f"""{system_prompt}
+
+Your previous answer was not accurate enough.
+Answer ONLY using the document content below.
+If the answer is not there, say so clearly.
+
+Document Content:
+{context}
+
+Question: {query}
+
+Accurate Answer:
+"""
+            response_obj = llm.invoke(strict_prompt)
+            response_text = _clean_markdown(response_obj.content)
+
+    updated_messages = list(messages) + [
+        HumanMessage(content=query),
+        AIMessage(content=response_text)
+    ]
+
+    return {
+        "answer": response_text,
+        "messages": updated_messages
+    }

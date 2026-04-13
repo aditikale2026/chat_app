@@ -49,15 +49,22 @@ async def register(payload: UserCreate, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(UserORM).where(UserORM.username == payload.username))
     if result.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Username taken")
-    
+
     new_user = UserORM(
-        username=payload.username, 
-        hashed_password=pwd_context.hash(payload.password), 
+        username=payload.username,
+        hashed_password=pwd_context.hash(payload.password),
         role=payload.role
     )
     db.add(new_user)
     await db.commit()
-    return {"message": "User created"}
+
+    # auto login — generate token immediately after register
+    token = make_token(payload.username, payload.role)
+    return {
+        "message": "User created",
+        "access_token": token,
+        "token_type": "bearer"
+    }
 
 @router.post("/login")
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):

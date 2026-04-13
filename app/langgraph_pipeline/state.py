@@ -1,4 +1,5 @@
 from typing import TypedDict, Annotated, Any,List
+from langgraph.graph.message import add_messages
 
 
 class GraphState(TypedDict):
@@ -6,10 +7,10 @@ class GraphState(TypedDict):
     filename: str | None
     mode: str
     answer: str |None
-    # messages: Annotated[List[Any], add_messages]
     messages:List[Any]
     doc_id: List[str] | None  # new
     upload_time: str | None  # new
     context : str | None
     fetch_all :bool
+    messages: Annotated[List[Any], add_messages]
     
