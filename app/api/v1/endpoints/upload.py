@@ -6,7 +6,7 @@ from datetime import datetime
 from langgraph.checkpoint.memory import InMemorySaver
 
 from app.langgraph_pipeline.graph_builder import graph
-from fastapi import APIRouter, UploadFile, File, HTTPException, Form ,Request
+from fastapi import APIRouter, UploadFile, File, HTTPException, Form ,Request,Depends
  
 
 # from app.services.vector_store import Storing
@@ -16,6 +16,8 @@ from app.utils.doc_cache import get_doc_id,store_doc_id
 from app.utils.document_process.pdf_loader import PDFProcessor
 from app.utils.document_process.chunking import splitting
 from app.models.schemas import UploadResponse
+from app.api.v1.endpoints.auth import get_current_user   
+from app.models.user import UserORM                       
 
 # vectorstore=Storing()
 # retriever = RAGRetriver(vector_store=vectorstore)
@@ -23,7 +25,7 @@ memory=InMemorySaver()
 router=APIRouter(prefix="/rag")
 
 @router.post("/upload_document",response_model=UploadResponse)
-async def upload_document(request:Request,file: UploadFile = File(...)):
+async def upload_document(request:Request,file: UploadFile = File(...),current_user: UserORM = Depends(get_current_user)):
     try:
 
         filename = save_uploaded_file(file)
