@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     POSTGRES_DB: str
     SECRET_KEY: str
     GROQ_API_KEY: str
+    REDIS_URL: str = "redis://localhost:6379"
 
     @property
     def DATABASE_URL(self):
