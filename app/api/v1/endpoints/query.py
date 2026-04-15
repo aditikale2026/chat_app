@@ -1,5 +1,6 @@
 import hashlib
 import json
+import traceback
 from fastapi import APIRouter, Request, HTTPException, Depends
 from app.models.schemas import RAGRequest, RAGResponse
 from app.api.v1.endpoints.auth import get_current_user
@@ -8,9 +9,9 @@ from app.models.user import UserORM
 
 router = APIRouter(prefix="/rag")
 
-RATE_LIMIT_REQUESTS = 20        # max requests per user
-RATE_LIMIT_WINDOW   = 60        # per 60 seconds
-ANSWER_CACHE_TTL    = 60 * 60   # cache answers for 1 hour
+RATE_LIMIT_REQUESTS = 20
+RATE_LIMIT_WINDOW   = 60
+ANSWER_CACHE_TTL    = 60 * 60
 
 
 async def enforce_rate_limit(redis, username: str):
@@ -22,13 +23,11 @@ async def enforce_rate_limit(redis, username: str):
         ttl = await redis.ttl(key)
         raise HTTPException(
             status_code=429,
-            detail=f"Rate limit exceeded. Try again in {ttl}s "
-                   f"({RATE_LIMIT_REQUESTS} requests per {RATE_LIMIT_WINDOW}s)."
+            detail=f"Rate limit exceeded. Try again in {ttl}s."
         )
 
 
 def make_cache_key(query: str) -> str:
-    """Normalise query then hash it — same question from any user hits same key."""
     normalised = query.strip().lower()
     return "answer_cache:" + hashlib.md5(normalised.encode()).hexdigest()
 
@@ -40,31 +39,38 @@ async def rag_query_endpoint(
     current_user: UserORM = Depends(get_current_user),
     redis=Depends(get_redis)
 ):
-    # ── 1. Rate limit ────────────────────────────────────────
-    await enforce_rate_limit(redis, current_user.username)
-
-    # ── 2. Global answer cache ───────────────────────────────
-    cache_key  = make_cache_key(request.query)
-    cached_raw = await redis.get(cache_key)
-    if cached_raw:
-        cached = json.loads(cached_raw)
-        print(f"[query] Cache HIT  '{request.query}'")
-        return {"query": cached["query"], "answer": cached["answer"], "mode": cached["mode"]}
-
-    print(f"[query] Cache MISS '{request.query}' — running pipeline")
-
-    # ── 3. Run LangGraph pipeline ────────────────────────────
     try:
+        # 1. Rate limit
+        await enforce_rate_limit(redis, current_user.username)
+
+        # 2. Cache check
+        cache_key  = make_cache_key(request.query)
+        cached_raw = await redis.get(cache_key)
+        if cached_raw:
+            cached = json.loads(cached_raw)
+            print(f"[query] Cache HIT '{request.query}'")
+            return {"query": cached["query"], "answer": cached["answer"], "mode": cached["mode"]}
+
+        print(f"[query] Cache MISS '{request.query}' — running pipeline")
+
+        # 3. Check graph is available
+        if not hasattr(req.app.state, "graph") or req.app.state.graph is None:
+            raise HTTPException(status_code=500, detail="Graph not initialised on app state")
+
         graph = req.app.state.graph
 
         config = {"configurable": {"thread_id": current_user.username}}
 
-        final_state = graph.invoke(
-            {"query": request.query, "answer": ""},
-            config=config
-        )
+        initial_state = {"query": request.query, "answer": ""}
 
-        if not final_state.get("answer") or final_state["answer"].strip() == "":
+        print(f"[query] Invoking graph for user={current_user.username}")
+        final_state = graph.invoke(initial_state, config=config)
+        print(f"[query] Graph returned. Keys: {list(final_state.keys())}")
+        print(f"[query] Mode: {final_state.get('mode')}")
+        print(f"[query] Answer: {str(final_state.get('answer', ''))[:100]}")
+
+        answer = final_state.get("answer", "")
+        if not answer or answer.strip() == "":
             raise HTTPException(
                 status_code=404,
                 detail="No answer found in the provided documents."
@@ -72,16 +78,17 @@ async def rag_query_endpoint(
 
         result = {
             "query":  final_state["query"],
-            "answer": final_state["answer"],
-            "mode":   final_state["mode"]
+            "answer": answer,
+            "mode":   final_state.get("mode", "unknown")
         }
 
-        # ── 4. Store in cache for future users ───────────────
         await redis.setex(cache_key, ANSWER_CACHE_TTL, json.dumps(result))
-
         return result
 
-    except (ValueError, HTTPException):
+    except HTTPException:
         raise
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # Print the FULL traceback to your terminal so you can see exactly what broke
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e) or repr(e))

@@ -1,7 +1,6 @@
 from app.langgraph_pipeline.state import GraphState
 from ddgs import DDGS
 import logging
-from app.utils.doc_cache import result
 
 logger = logging.getLogger(__name__)
 

@@ -6,14 +6,13 @@ from app.api.v1.endpoints.query  import router as rag_query
 from app.api.v1.endpoints.upload import router as rag_upload
 from app.api.v1.endpoints.auth   import router as auth_router
 from app.db.postgressconnection  import engine, Base
-from app.db.redis_client         import init_redis, close_redis
+from app.db.redis_client         import init_redis, close_redis, get_redis  # ← get_redis not redis_client
 from app.models.user             import UserORM
 from app.services.vector_store   import Storing
 from app.services.retrieval      import RAGRetriver
-from app.langgraph_pipeline.dependencies  import set_service
-from app.langgraph_pipeline.graph_builder import compile_graph
-from langgraph.checkpoint.redis.aio       import AsyncRedisSaver
-from app.config import settings
+from app.langgraph_pipeline.dependencies       import set_service
+from app.langgraph_pipeline.graph_builder      import compile_graph
+from app.langgraph_pipeline.redis_checkpointer import RedisCheckpointer
 
 
 @asynccontextmanager
@@ -22,16 +21,14 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    # 2. Redis
+    # 2. Redis — must happen BEFORE anything uses it
     await init_redis()
 
-    # 3. LangGraph — AsyncRedisSaver must stay open for app lifetime
-    checkpointer = AsyncRedisSaver.from_conn_string(settings.REDIS_URL)
-    await checkpointer.__aenter__()
-    await checkpointer.asetup()
-    app.state.graph       = compile_graph(checkpointer)
-    app.state.checkpointer = checkpointer
-    print("LangGraph compiled with Redis checkpointer")
+    # 3. LangGraph — call get_redis() AFTER init so it's not None
+    redis = await get_redis()                        # ← fetch the live client
+    checkpointer    = RedisCheckpointer(redis)       # ← now it's not None
+    app.state.graph = compile_graph(checkpointer)
+    print("LangGraph compiled with plain Redis checkpointer")
 
     # 4. Vector store + retriever
     app.state.vectorstore = Storing()
@@ -42,8 +39,6 @@ async def lifespan(app: FastAPI):
     print("App started")
     yield
 
-    # Cleanup
-    await app.state.checkpointer.__aexit__(None, None, None)
     await close_redis()
     print("App ended")
 

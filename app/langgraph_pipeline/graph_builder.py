@@ -1,4 +1,4 @@
-from langgraph.checkpoint.redis.aio import AsyncRedisSaver
+from langgraph.checkpoint.memory import MemorySaver
 from app.langgraph_pipeline.state import GraphState
 from app.langgraph_pipeline.nodes.classify_node import classify_node
 from app.langgraph_pipeline.nodes.llm_node import llm_node
@@ -44,5 +44,4 @@ _build.add_edge("llm_node", END)
 
 
 def compile_graph(checkpointer):
-    """Called once from main.py lifespan after Redis is ready."""
     return _build.compile(checkpointer=checkpointer)
