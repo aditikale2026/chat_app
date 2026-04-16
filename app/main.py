@@ -5,6 +5,7 @@ import time
 from app.api.v1.endpoints.query  import router as rag_query
 from app.api.v1.endpoints.upload import router as rag_upload
 from app.api.v1.endpoints.auth   import router as auth_router
+from app.api.v1.endpoints.ui     import router as ui_router
 from app.db.postgressconnection  import engine, Base
 from app.db.redis_client         import init_redis, close_redis, get_redis  # ← get_redis not redis_client
 from app.models.user             import UserORM
@@ -13,7 +14,9 @@ from app.services.retrieval      import RAGRetriver
 from app.langgraph_pipeline.dependencies       import set_service
 from app.langgraph_pipeline.graph_builder      import compile_graph
 from app.langgraph_pipeline.redis_checkpointer import RedisCheckpointer
-
+from fastapi.staticfiles import StaticFiles
+from app.api.v1.endpoints.frontend_router import router as pages_router
+# from app.frontend_router  import router as ui_proxy_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -44,7 +47,8 @@ async def lifespan(app: FastAPI):
 
 
 rag_api = FastAPI(title="Chatbot", lifespan=lifespan)
-
+rag_api.mount("/static", StaticFiles(directory="app/static"), name="static")
+rag_api.include_router(pages_router)
 
 @rag_api.middleware("http")
 async def log_requests(request: Request, call_next):
@@ -58,3 +62,4 @@ async def log_requests(request: Request, call_next):
 rag_api.include_router(rag_query)
 rag_api.include_router(rag_upload)
 rag_api.include_router(auth_router)
+rag_api.include_router(ui_router)

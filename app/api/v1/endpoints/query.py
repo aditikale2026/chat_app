@@ -40,15 +40,17 @@ async def rag_query_endpoint(
     redis=Depends(get_redis)
 ):
     try:
+        # Get username directly from token (avoid DB lazy-load)
+        username = current_user.username if hasattr(current_user, 'username') else str(current_user)
+        
         # 1. Rate limit
-        await enforce_rate_limit(redis, current_user.username)
+        await enforce_rate_limit(redis, username)
 
         # 2. Cache check
         cache_key  = make_cache_key(request.query)
         cached_raw = await redis.get(cache_key)
         if cached_raw:
             cached = json.loads(cached_raw)
-            print(f"[query] Cache HIT '{request.query}'")
             return {"query": cached["query"], "answer": cached["answer"], "mode": cached["mode"]}
 
         print(f"[query] Cache MISS '{request.query}' — running pipeline")
@@ -59,15 +61,11 @@ async def rag_query_endpoint(
 
         graph = req.app.state.graph
 
-        config = {"configurable": {"thread_id": current_user.username}}
+        config = {"configurable": {"thread_id": username}}
 
         initial_state = {"query": request.query, "answer": ""}
 
-        print(f"[query] Invoking graph for user={current_user.username}")
-        final_state = graph.invoke(initial_state, config=config)
-        print(f"[query] Graph returned. Keys: {list(final_state.keys())}")
-        print(f"[query] Mode: {final_state.get('mode')}")
-        print(f"[query] Answer: {str(final_state.get('answer', ''))[:100]}")
+        final_state = await graph.ainvoke(initial_state, config=config)
 
         answer = final_state.get("answer", "")
         if not answer or answer.strip() == "":
