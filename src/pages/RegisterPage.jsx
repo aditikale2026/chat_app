@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { authAPI } from '../utils/api'
+import { authAPIClient } from '../utils/api'
 import { useAuth } from '../context/AuthContext'
 import { AlertCircle, Loader } from 'lucide-react'
 
@@ -11,7 +11,7 @@ export const RegisterPage = () => {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
-  const { login } = useAuth()
+  const { register } = useAuth()
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -29,9 +29,7 @@ export const RegisterPage = () => {
 
     setLoading(true)
     try {
-      const response = await authAPI.register(username, password)
-      const { access_token } = response.data
-      login({ authenticated: true, token: access_token })
+      await register(username, password)
       navigate('/chat')
     } catch (err) {
       setError(err.response?.data?.detail || 'Registration failed. Please try again.')

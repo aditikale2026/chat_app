@@ -50,3 +50,16 @@ class Storing:
 
     def get_active_docs(self):
         return self.active_doc
+
+    def delete_document_by_id(self, doc_id: str):
+        """Delete all chunks belonging to a document from the vector store by doc_id."""
+        try:
+            # Use the underlying Chroma collection to delete by metadata filter
+            # Chroma's delete method takes a where clause
+            self.vectorstore._collection.delete(
+                where={"doc_id": {"$eq": doc_id}}
+            )
+            print(f"Deleted doc_id={doc_id} from vector store.")
+        except Exception as e:
+            print(f"Warning: Failed to delete doc_id={doc_id} from vector store: {e}")
+            # Don't raise — we still want to mark it inactive in DB even if vector store deletion fails

@@ -51,6 +51,7 @@ async def rag_query_endpoint(
         cached_raw = await redis.get(cache_key)
         if cached_raw:
             cached = json.loads(cached_raw)
+            print(f"[query] Cache HIT '{request.query}'")
             return {"query": cached["query"], "answer": cached["answer"], "mode": cached["mode"]}
 
         print(f"[query] Cache MISS '{request.query}' — running pipeline")
@@ -65,7 +66,12 @@ async def rag_query_endpoint(
 
         initial_state = {"query": request.query, "answer": ""}
 
+        print(f"[query] Invoking graph for user={username}")
+        # Use ainvoke (async) instead of invoke (sync)
         final_state = await graph.ainvoke(initial_state, config=config)
+        print(f"[query] Graph returned. Keys: {list(final_state.keys())}")
+        print(f"[query] Mode: {final_state.get('mode')}")
+        print(f"[query] Answer: {str(final_state.get('answer', ''))[:100]}")
 
         answer = final_state.get("answer", "")
         if not answer or answer.strip() == "":

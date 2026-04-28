@@ -1,7 +1,7 @@
 import { LogOut, Upload, MessageCircle } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { authAPI } from '../utils/api'
+import { authAPIClient } from '../utils/api'
 import { useState } from 'react'
 
 export const Navbar = () => {
@@ -9,10 +9,11 @@ export const Navbar = () => {
   const { logout } = useAuth()
   const [loading, setLoading] = useState(false)
 
+  // ⭐ FILE THAT CALLS THE LOGOUT POST REQUEST
   const handleLogout = async () => {
     setLoading(true)
     try {
-      await authAPI.logout()
+      await authAPIClient.logout()
       logout()
       navigate('/login')
     } catch (error) {

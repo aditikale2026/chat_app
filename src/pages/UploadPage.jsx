@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Navbar } from '../components/Navbar'
-import { ragAPI } from '../utils/api'
+import { ragAPIClient } from '../utils/api'
 import { Upload as UploadIcon, CheckCircle, AlertCircle, Loader } from 'lucide-react'
 
 export const UploadPage = () => {
@@ -42,7 +42,7 @@ export const UploadPage = () => {
     setMessage('')
 
     try {
-      await ragAPI.upload(file)
+      await ragAPIClient.upload(file)
       setMessageType('success')
       setMessage(`✓ "${file.name}" uploaded successfully! Start asking questions about it.`)
       setFile(null)

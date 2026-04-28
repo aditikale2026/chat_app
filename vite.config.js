@@ -10,8 +10,11 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
+      '/auth': 'http://localhost:8000',
       '/rag': 'http://localhost:8000',
-      '/ui': 'http://localhost:8000',
-    }
-  }
+    },
+    watch: {
+      ignored: ['**/venv/**', '**/.git/**', '**/node_modules/**', '**/app/Storage/**'],
+    },
+  },
 })

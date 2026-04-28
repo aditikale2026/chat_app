@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Navbar } from '../components/Navbar'
-import { ragAPI } from '../utils/api'
+import { ragAPIClient } from '../utils/api'
 import { Send, Loader, AlertCircle } from 'lucide-react'
 
 export const ChatPage = () => {
@@ -29,7 +29,7 @@ export const ChatPage = () => {
     setLoading(true)
 
     try {
-      const response = await ragAPI.query(userMessage)
+      const response = await ragAPIClient.query(userMessage)
       const data = response.data
       console.log('[Chat] API Response:', data)
 

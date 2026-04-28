@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { authAPI } from '../utils/api'
+import { authAPIClient } from '../utils/api'
 import { useAuth } from '../context/AuthContext'
 import { AlertCircle, Loader } from 'lucide-react'
 
@@ -18,9 +18,7 @@ export const LoginPage = () => {
     setLoading(true)
 
     try {
-      const response = await authAPI.login(username, password)
-      const { access_token } = response.data
-      login({ authenticated: true, token: access_token })
+      await login(username, password)
       navigate('/chat')
     } catch (err) {
       setError(err.response?.data?.detail || 'Login failed. Please try again.')
