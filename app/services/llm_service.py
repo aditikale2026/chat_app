@@ -1,6 +1,7 @@
 from langchain_groq import ChatGroq
 import os
 from dotenv import load_dotenv
+from app.config import settings
 
 load_dotenv()
 
@@ -40,11 +41,11 @@ STRICT RULES:
 - Never end with "Would you like to know more?"
 """
 
+
 def get__llm(temperature: float = 0.7):
-    api_key = os.getenv("GROQ_API_KEY")
     llm = ChatGroq(
-        model="llama-3.3-70b-versatile",  # ✅ upgraded model
-        api_key=api_key,
+        model="llama-3.3-70b-versatile",
+        api_key=settings.GROQ_API_KEY,   # from config, not os.getenv
         temperature=temperature,
         max_tokens=2000
     )

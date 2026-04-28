@@ -18,7 +18,7 @@ from sqlalchemy import select
 from passlib.context import CryptContext
 from jose import jwt, JWTError
 from datetime import datetime, timedelta, timezone
-from pydantic import BaseModel
+from pydantic import BaseModel, constr
 from typing import Optional
 
 from app.db.postgressconnection import get_db
@@ -27,7 +27,8 @@ from app.models.user import UserORM, UserCreate
 from app.config import settings
 
 router = APIRouter(prefix="/auth")
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Use a hashing scheme that supports longer passwords and avoids bcrypt's 72-byte limit.
+pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
 # tokenUrl must match the login endpoint so Swagger UI works
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login", auto_error=False)
@@ -40,12 +41,12 @@ REFRESH_TOKEN_EXPIRE_HOURS = 24 * 7   # 7 days
 
 class LoginRequest(BaseModel):
     username: str
-    password: str
+    password: constr(min_length=1)
 
 
 class RegisterRequest(BaseModel):
     username: str
-    password: str
+    password: constr(min_length=8)
 
 
 # ── Token helpers ─────────────────────────────────────────────

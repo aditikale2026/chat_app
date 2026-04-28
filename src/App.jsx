@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import { useRateLimit } from "./hooks/useRateLimit";
 import { useQueryHistory } from "./hooks/useQueryHistory";
 import { ragAPIClient } from "./utils/api";
+import { Send } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────
 // Root
@@ -37,14 +38,42 @@ function Main() {
 // ─────────────────────────────────────────────────────────────
 // Auth Page — Login / Register tabs
 // ─────────────────────────────────────────────────────────────
+function RagnovaMark() {
+  return (
+    <svg viewBox="0 0 64 64" width="24" height="24" aria-hidden="true">
+      <defs>
+        <linearGradient id="ragnova-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#73d0ff" />
+          <stop offset="100%" stopColor="#8a5cff" />
+        </linearGradient>
+      </defs>
+      <circle cx="32" cy="32" r="28" fill="url(#ragnova-grad)" opacity="0.16" />
+      <path
+        d="M32 14 L42 26 L34 50 L24 50 L16 26 Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M32 18 L38 30 L32 40 L26 30 Z"
+        fill="currentColor"
+        opacity="0.9"
+      />
+      <circle cx="32" cy="32" r="3" fill="currentColor" />
+    </svg>
+  );
+}
+
 function AuthPage() {
   const [tab, setTab] = useState("login");   // "login" | "register"
   return (
     <div className="auth-bg">
       <div className="auth-card">
         <div className="auth-logo">
-          <span className="logo-icon">⬡</span>
-          <span className="logo-text">RAGBase</span>
+          <span className="logo-icon"><RagnovaMark /></span>
+          <span className="logo-text">RAGNOVA</span>
         </div>
         <div className="auth-tabs">
           <button className={tab === "login"    ? "tab active" : "tab"} onClick={() => setTab("login")}>Sign in</button>
@@ -125,14 +154,15 @@ function RegisterForm({ onSuccess }) {
 function Dashboard() {
   const { user, logout } = useAuth();
   const [activeTab, setActiveTab] = useState("query"); // "query" | "upload" | "history"
+  const queryHistory = useQueryHistory();
 
   return (
     <div className="dashboard">
       {/* Sidebar */}
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <span className="logo-icon">⬡</span>
-          <span className="logo-text">RAGBase</span>
+          <span className="logo-icon"><RagnovaMark /></span>
+          <span className="logo-text">RAGNOVA</span>
         </div>
         <nav className="sidebar-nav">
           {[
@@ -163,9 +193,9 @@ function Dashboard() {
 
       {/* Main content */}
       <main className="main-content">
-        {activeTab === "query"   && <QueryPanel />}
+        {activeTab === "query"   && <QueryPanel addEntry={queryHistory.addEntry} />}
         {activeTab === "upload"  && <UploadPanel />}
-        {activeTab === "history" && <HistoryPanel />}
+        {activeTab === "history" && <HistoryPanel history={queryHistory.history} clearHistory={queryHistory.clearHistory} />}
       </main>
     </div>
   );
@@ -174,35 +204,58 @@ function Dashboard() {
 // ─────────────────────────────────────────────────────────────
 // Query Panel
 // ─────────────────────────────────────────────────────────────
-function QueryPanel() {
+function QueryPanel({ addEntry }) {
   const { blocked, secondsLeft, recordQuery } = useRateLimit();
-  const { addEntry } = useQueryHistory();
-  const [query,  setQuery]  = useState("");
-  const [result, setResult] = useState(null);
-  const [error,  setError]  = useState("");
-  const [busy,   setBusy]   = useState(false);
+  const [query, setQuery] = useState("");
+  const [messages, setMessages] = useState([]);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const chatBodyRef = useRef(null);
+
+  useEffect(() => {
+    chatBodyRef.current?.scrollTo({ top: chatBodyRef.current.scrollHeight, behavior: "smooth" });
+  }, [messages]);
 
   const submit = async (e) => {
     e.preventDefault();
     if (!query.trim() || busy || blocked) return;
-    setBusy(true); setError(""); setResult(null);
+
+    const userQuery = query.trim();
+    setBusy(true);
+    setError("");
+    setMessages((prev) => [...prev, { role: "user", content: userQuery }]);
+
     try {
-      const { data } = await ragAPIClient.query(query);
-      setResult(data);
-      recordQuery(); // Record query for rate limiting
+      const { data } = await ragAPIClient.query(userQuery);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: data.answer,
+        },
+      ]);
+      setQuery("");
+      recordQuery();
       addEntry({ query: data.query, answer: data.answer, mode: data.mode, cachedHit: data.mode === "cache" });
     } catch (err) {
-      if (err.response?.status !== 429)
-        setError(err.response?.data?.detail || "Query failed");
+      if (err.response?.status !== 429) {
+        const message = err.response?.data?.detail || "Query failed";
+        setError(message);
+        setMessages((prev) => [...prev, { role: "error", content: message }]);
+      }
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <div className="panel">
-      <h1 className="panel-title">Ask your documents</h1>
-      <p className="panel-sub">Query across all your uploaded documents using AI.</p>
+    <div className="panel chat-panel">
+      <div className="panel-header-row">
+        <div>
+          <h1 className="panel-title">Ask your documents</h1>
+          <p className="panel-sub">Query across all your uploaded documents using AI.</p>
+        </div>
+      </div>
 
       {blocked && (
         <div className="rate-limit-banner">
@@ -214,32 +267,45 @@ function QueryPanel() {
         </div>
       )}
 
-      <form className="query-form" onSubmit={submit}>
-        <textarea
-          className="query-input"
-          placeholder="e.g. What are the main findings in the uploaded report?"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          rows={3}
-          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(e); }}}
-        />
-        <button className="btn-primary query-btn" disabled={busy || blocked || !query.trim()}>
-          {busy ? <><Spinner /> Searching…</> : "Search"}
-        </button>
-      </form>
+      <div className="chat-window">
+        <div className="chat-body" ref={chatBodyRef}>
+          {messages.length === 0 && (
+            <div className="chat-placeholder">
+              Start a conversation by asking something about your uploaded documents.
+            </div>
+          )}
+
+          {messages.map((message, index) => (
+            <div key={index} className={`chat-message ${message.role}`}>
+              <div>{message.content}</div>
+            </div>
+          ))}
+        </div>
+
+        <form className="chat-form" onSubmit={submit}>
+          <textarea
+            className="query-input chat-input"
+            placeholder="Ask a question about your documents..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            rows={2}
+            disabled={busy || blocked}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                submit(e);
+              }
+            }}
+          />
+          <div className="chat-footer">
+            <button className="btn-primary" type="submit" disabled={busy || blocked || !query.trim()}>
+              {busy ? <><Spinner /> Thinking…</> : <><Send size={16} /> Ask</>}
+            </button>
+          </div>
+        </form>
+      </div>
 
       {error && <div className="alert alert-error">{error}</div>}
-
-      {result && (
-        <div className="result-card">
-          <div className="result-header">
-            <span className="result-label">Answer</span>
-            <CacheBadge mode={result.mode} />
-          </div>
-          <div className="result-body">{result.answer}</div>
-          <div className="result-query-echo">Query: <em>{result.query}</em></div>
-        </div>
-      )}
     </div>
   );
 }
@@ -406,9 +472,7 @@ function UploadPanel() {
 // ─────────────────────────────────────────────────────────────
 // History Panel
 // ─────────────────────────────────────────────────────────────
-function HistoryPanel() {
-  const { history, clearHistory } = useQueryHistory();
-
+function HistoryPanel({ history, clearHistory }) {
   return (
     <div className="panel">
       <div className="panel-header-row">

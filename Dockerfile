@@ -14,6 +14,7 @@ COPY index.html ./
 # Install dependencies and build
 RUN npm ci && npm run build
 
+
 # Stage 2: Build backend with frontend assets
 FROM python:3.12-slim
 
@@ -31,6 +32,9 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Install Python dependencies
+RUN pip install --no-cache-dir torch==2.1.2+cpu --index-url https://download.pytorch.org/whl/cpu
+RUN pip install --no-cache-dir -r requirements.txt
 # Copy backend code
 COPY app ./app
 
