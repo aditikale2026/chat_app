@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings
+from pathlib import Path
 
 class Settings(BaseSettings):
     POSTGRES_USER: str
@@ -10,9 +11,17 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str
     REDIS_URL: str = "redis://localhost:6379"
 
+    # ── NEW: filesystem paths with sensible defaults ──────────
+    CHROMA_PERSIST_DIR: str = "./app/Storage"
+    UPLOAD_FOLDER: str = "./data"
+    # ---------------------------------------------------------
+
     @property
     def DATABASE_URL(self):
-        return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+        return (
+            f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
+            f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+        )
 
     class Config:
         env_file = ".env"

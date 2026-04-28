@@ -1,6 +1,7 @@
 import os
 from typing import List, Any
 from app.services.embedding import embedding
+from app.config import settings          # ← import settings
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 
@@ -9,20 +10,23 @@ class Storing:
     def __init__(
         self,
         collection_name: str = "pdf_documents",
-        persist_directory: str = "/home/my/Desktop/Chatapp/app/Storage",
+        persist_directory: str | None = None,   # ← no more hardcoded default
     ):
         self.collection_name = collection_name
-        self.persist_directory = persist_directory
-        self.lc_docs = []     # accumulates all uploaded docs across all uploads
-        self.active_doc = []  # only the most recently uploaded doc's chunks
+        # Use passed value → env var → relative default, in that priority order
+        self.persist_directory = persist_directory or settings.CHROMA_PERSIST_DIR
+
+        self.lc_docs = []
+        self.active_doc = []
 
         os.makedirs(self.persist_directory, exist_ok=True)
 
         self.vectorstore = Chroma(
             collection_name=self.collection_name,
             embedding_function=embedding,
-            persist_directory=self.persist_directory
+            persist_directory=self.persist_directory,
         )
+
 
     def add_documents(self, documents: List[Any], doc_id: str, filename: str, upload_time: Any, total_length: int):
         # CHANGED: use local current_docs so active_doc resets every upload
