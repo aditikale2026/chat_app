@@ -38,7 +38,7 @@ COPY app ./app
 COPY --from=frontend-builder /app/app/static/dist ./app/static/dist
 
 # Create necessary directories
-RUN mkdir -p app/static app/Storage
+RUN mkdir -p app/static app/Storage data
 
 # Expose port
 EXPOSE 8000

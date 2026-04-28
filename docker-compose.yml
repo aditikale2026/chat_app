@@ -54,6 +54,7 @@ services:
         condition: service_healthy
     volumes:
       - ./app/Storage:/app/app/Storage
+      - ./data:/app/data
     networks:
       - chatapp_network
     restart: unless-stopped
